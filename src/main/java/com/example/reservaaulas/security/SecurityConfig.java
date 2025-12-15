@@ -67,15 +67,28 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // Configuración CORS estándar para front en desarrollo
+    // Configuración CORS mejorada para producción
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        config.setAllowedOrigins(List.of("*"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("*"));
-        config.setExposedHeaders(List.of("Authorization"));
+        // Permitir todos los orígenes (en producción, especifica tu dominio del frontend)
+        config.setAllowedOriginPatterns(Arrays.asList("*"));
+
+        // Métodos HTTP permitidos
+        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+
+        // Headers permitidos
+        config.setAllowedHeaders(Arrays.asList("*"));
+
+        // Exponer headers de respuesta
+        config.setExposedHeaders(Arrays.asList("Authorization", "Content-Type"));
+
+        // Permitir credenciales
+        config.setAllowCredentials(true);
+
+        // Tiempo de caché de la configuración CORS
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

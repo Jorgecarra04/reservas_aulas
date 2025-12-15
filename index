@@ -1,0 +1,707 @@
+import React, { useState, useEffect } from 'react';
+import { Calendar, Users, Clock, BookOpen, LogOut, Plus, Trash2, Edit, Filter } from 'lucide-react';
+
+// Configuración de la API - CAMBIA ESTA URL cuando despliegues el backend
+const API_URL = 'http://localhost:8080';
+
+const App = () => {
+  const [currentView, setCurrentView] = useState('login');
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('token'));
+  
+  const [aulas, setAulas] = useState([]);
+  const [reservas, setReservas] = useState([]);
+  const [tramosHorarios, setTramosHorarios] = useState([]);
+  
+  const [loginData, setLoginData] = useState({ email: '', password: '' });
+  const [registerData, setRegisterData] = useState({ 
+    nombre: '', 
+    email: '', 
+    password: '', 
+    role: 'ROLE_PROFESOR' 
+  });
+  
+  const [nuevaReserva, setNuevaReserva] = useState({
+    fecha: '',
+    motivo: '',
+    numeroAsistentes: 1,
+    aulaId: '',
+    tramoHorarioId: ''
+  });
+
+  const [nuevaAula, setNuevaAula] = useState({
+    nombre: '',
+    capacidad: 20,
+    esAulaDeOrdenadores: false,
+    numeroOrdenadores: 0
+  });
+
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  // Headers con autenticación
+  const getHeaders = () => ({
+    'Content-Type': 'application/json',
+    'Authorization': token ? `Bearer ${token}` : ''
+  });
+
+  // Login
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loginData)
+      });
+      
+      if (!response.ok) throw new Error('Credenciales incorrectas');
+      
+      const data = await response.json();
+      setToken(data.token);
+      setUser(data.usuario);
+      localStorage.setItem('token', data.token);
+      setCurrentView('reservas');
+      setSuccess('¡Bienvenido!');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // Register
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setError('');
+    try {
+      const response = await fetch(`${API_URL}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(registerData)
+      });
+      
+      if (!response.ok) throw new Error('Error en el registro');
+      
+      const data = await response.json();
+      setToken(data.token);
+      setUser(data.usuario);
+      localStorage.setItem('token', data.token);
+      setCurrentView('reservas');
+      setSuccess('¡Registro exitoso!');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // Logout
+  const handleLogout = () => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('token');
+    setCurrentView('login');
+  };
+
+  // Cargar datos
+  useEffect(() => {
+    if (token) {
+      fetchReservas();
+      fetchAulas();
+      fetchTramosHorarios();
+    }
+  }, [token]);
+
+  const fetchReservas = async () => {
+    try {
+      const response = await fetch(`${API_URL}/reservas`, {
+        headers: getHeaders()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setReservas(data);
+      }
+    } catch (err) {
+      console.error('Error al cargar reservas:', err);
+    }
+  };
+
+  const fetchAulas = async () => {
+    try {
+      const response = await fetch(`${API_URL}/aulas`, {
+        headers: getHeaders()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAulas(data);
+      }
+    } catch (err) {
+      console.error('Error al cargar aulas:', err);
+    }
+  };
+
+  const fetchTramosHorarios = async () => {
+    try {
+      const response = await fetch(`${API_URL}/tramo-horario`, {
+        headers: getHeaders()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setTramosHorarios(data);
+      }
+    } catch (err) {
+      console.error('Error al cargar tramos horarios:', err);
+    }
+  };
+
+  // Crear reserva
+  const handleCreateReserva = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    try {
+      const response = await fetch(`${API_URL}/reservas`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(nuevaReserva)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.mensaje || 'Error al crear reserva');
+      }
+      
+      setSuccess('¡Reserva creada exitosamente!');
+      fetchReservas();
+      setNuevaReserva({
+        fecha: '',
+        motivo: '',
+        numeroAsistentes: 1,
+        aulaId: '',
+        tramoHorarioId: ''
+      });
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // Eliminar reserva
+  const handleDeleteReserva = async (id) => {
+    if (!confirm('¿Estás seguro de eliminar esta reserva?')) return;
+    
+    try {
+      const response = await fetch(`${API_URL}/reservas/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+      });
+      
+      if (response.ok) {
+        setSuccess('Reserva eliminada');
+        fetchReservas();
+      }
+    } catch (err) {
+      setError('Error al eliminar reserva');
+    }
+  };
+
+  // Crear aula (solo admin)
+  const handleCreateAula = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    try {
+      const response = await fetch(`${API_URL}/aulas`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(nuevaAula)
+      });
+      
+      if (!response.ok) throw new Error('Error al crear aula');
+      
+      setSuccess('¡Aula creada exitosamente!');
+      fetchAulas();
+      setNuevaAula({
+        nombre: '',
+        capacidad: 20,
+        esAulaDeOrdenadores: false,
+        numeroOrdenadores: 0
+      });
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  // Vista de Login
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+          <div className="text-center mb-8">
+            <BookOpen className="mx-auto h-16 w-16 text-indigo-600 mb-4" />
+            <h1 className="text-3xl font-bold text-gray-800">Reserva de Aulas</h1>
+            <p className="text-gray-600 mt-2">Sistema de gestión educativa</p>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+              {error}
+            </div>
+          )}
+
+          <div className="flex gap-2 mb-6">
+            <button
+              onClick={() => setCurrentView('login')}
+              className={`flex-1 py-2 rounded-lg font-medium ${
+                currentView === 'login'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              Iniciar Sesión
+            </button>
+            <button
+              onClick={() => setCurrentView('register')}
+              className={`flex-1 py-2 rounded-lg font-medium ${
+                currentView === 'register'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              Registrarse
+            </button>
+          </div>
+
+          {currentView === 'login' ? (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={loginData.email}
+                  onChange={(e) => setLoginData({...loginData, email: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Contraseña
+                </label>
+                <input
+                  type="password"
+                  value={loginData.password}
+                  onChange={(e) => setLoginData({...loginData, password: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+              >
+                Iniciar Sesión
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleRegister} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nombre
+                </label>
+                <input
+                  type="text"
+                  value={registerData.nombre}
+                  onChange={(e) => setRegisterData({...registerData, nombre: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={registerData.email}
+                  onChange={(e) => setRegisterData({...registerData, email: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Contraseña
+                </label>
+                <input
+                  type="password"
+                  value={registerData.password}
+                  onChange={(e) => setRegisterData({...registerData, password: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Rol
+                </label>
+                <select
+                  value={registerData.role}
+                  onChange={(e) => setRegisterData({...registerData, role: e.target.value})}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                >
+                  <option value="ROLE_PROFESOR">Profesor</option>
+                  <option value="ROLE_ADMIN">Administrador</option>
+                </select>
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+              >
+                Registrarse
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Vista principal (con autenticación)
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <BookOpen className="h-8 w-8 text-indigo-600" />
+            <div>
+              <h1 className="text-xl font-bold text-gray-800">Reserva de Aulas</h1>
+              <p className="text-sm text-gray-600">Bienvenido, {user?.nombre}</p>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+            Cerrar Sesión
+          </button>
+        </div>
+      </header>
+
+      {/* Navigation */}
+      <nav className="bg-white border-b">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex gap-1">
+            <button
+              onClick={() => setCurrentView('reservas')}
+              className={`px-6 py-3 font-medium ${
+                currentView === 'reservas'
+                  ? 'border-b-2 border-indigo-600 text-indigo-600'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              Mis Reservas
+            </button>
+            <button
+              onClick={() => setCurrentView('nueva-reserva')}
+              className={`px-6 py-3 font-medium ${
+                currentView === 'nueva-reserva'
+                  ? 'border-b-2 border-indigo-600 text-indigo-600'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              Nueva Reserva
+            </button>
+            <button
+              onClick={() => setCurrentView('aulas')}
+              className={`px-6 py-3 font-medium ${
+                currentView === 'aulas'
+                  ? 'border-b-2 border-indigo-600 text-indigo-600'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              Aulas
+            </button>
+            {user?.role === 'ROLE_ADMIN' && (
+              <button
+                onClick={() => setCurrentView('admin')}
+                className={`px-6 py-3 font-medium ${
+                  currentView === 'admin'
+                    ? 'border-b-2 border-indigo-600 text-indigo-600'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                Administración
+              </button>
+            )}
+          </div>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 py-8">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-4">
+            {success}
+          </div>
+        )}
+
+        {/* Vista de Reservas */}
+        {currentView === 'reservas' && (
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">Mis Reservas</h2>
+            <div className="grid gap-4">
+              {reservas.length === 0 ? (
+                <div className="text-center py-12 bg-white rounded-lg">
+                  <Calendar className="mx-auto h-16 w-16 text-gray-300 mb-4" />
+                  <p className="text-gray-600">No tienes reservas aún</p>
+                </div>
+              ) : (
+                reservas.map((reserva) => (
+                  <div key={reserva.id} className="bg-white rounded-lg shadow p-6">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                          {reserva.aula?.nombre}
+                        </h3>
+                        <div className="space-y-2 text-sm text-gray-600">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            <span>{reserva.fecha}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            <span>
+                              {reserva.tramoHorario?.horaInicio} - {reserva.tramoHorario?.horaFin}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4" />
+                            <span>{reserva.numeroAsistentes} asistentes</span>
+                          </div>
+                          <p className="mt-2"><strong>Motivo:</strong> {reserva.motivo}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteReserva(reserva.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Vista Nueva Reserva */}
+        {currentView === 'nueva-reserva' && (
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">Nueva Reserva</h2>
+            <div className="bg-white rounded-lg shadow p-6 max-w-2xl">
+              <form onSubmit={handleCreateReserva} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Aula
+                  </label>
+                  <select
+                    value={nuevaReserva.aulaId}
+                    onChange={(e) => setNuevaReserva({...nuevaReserva, aulaId: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    required
+                  >
+                    <option value="">Selecciona un aula</option>
+                    {aulas.map((aula) => (
+                      <option key={aula.id} value={aula.id}>
+                        {aula.nombre} - Capacidad: {aula.capacidad}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Fecha
+                  </label>
+                  <input
+                    type="date"
+                    value={nuevaReserva.fecha}
+                    onChange={(e) => setNuevaReserva({...nuevaReserva, fecha: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tramo Horario
+                  </label>
+                  <select
+                    value={nuevaReserva.tramoHorarioId}
+                    onChange={(e) => setNuevaReserva({...nuevaReserva, tramoHorarioId: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    required
+                  >
+                    <option value="">Selecciona un horario</option>
+                    {tramosHorarios.map((tramo) => (
+                      <option key={tramo.id} value={tramo.id}>
+                        {tramo.diaSemana} - {tramo.horaInicio} a {tramo.horaFin}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Número de Asistentes
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={nuevaReserva.numeroAsistentes}
+                    onChange={(e) => setNuevaReserva({...nuevaReserva, numeroAsistentes: parseInt(e.target.value)})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Motivo
+                  </label>
+                  <textarea
+                    value={nuevaReserva.motivo}
+                    onChange={(e) => setNuevaReserva({...nuevaReserva, motivo: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    rows="3"
+                    required
+                  ></textarea>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Plus className="h-5 w-5" />
+                  Crear Reserva
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Vista de Aulas */}
+        {currentView === 'aulas' && (
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">Aulas Disponibles</h2>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {aulas.map((aula) => (
+                <div key={aula.id} className="bg-white rounded-lg shadow p-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">
+                    {aula.nombre}
+                  </h3>
+                  <div className="space-y-2 text-sm text-gray-600">
+                    <div className="flex items-center justify-between">
+                      <span>Capacidad:</span>
+                      <span className="font-medium">{aula.capacidad} personas</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Ordenadores:</span>
+                      <span className="font-medium">
+                        {aula.esAulaDeOrdenadores ? `${aula.numeroOrdenadores} PCs` : 'No'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Vista de Administración */}
+        {currentView === 'admin' && user?.role === 'ROLE_ADMIN' && (
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">Panel de Administración</h2>
+            <div className="bg-white rounded-lg shadow p-6 max-w-2xl">
+              <h3 className="text-xl font-semibold mb-4">Crear Nueva Aula</h3>
+              <form onSubmit={handleCreateAula} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nombre del Aula
+                  </label>
+                  <input
+                    type="text"
+                    value={nuevaAula.nombre}
+                    onChange={(e) => setNuevaAula({...nuevaAula, nombre: e.target.value})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Capacidad
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={nuevaAula.capacidad}
+                    onChange={(e) => setNuevaAula({...nuevaAula, capacidad: parseInt(e.target.value)})}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="esAulaDeOrdenadores"
+                    checked={nuevaAula.esAulaDeOrdenadores}
+                    onChange={(e) => setNuevaAula({...nuevaAula, esAulaDeOrdenadores: e.target.checked})}
+                    className="h-5 w-5 text-indigo-600 rounded"
+                  />
+                  <label htmlFor="esAulaDeOrdenadores" className="text-sm font-medium text-gray-700">
+                    Es aula de ordenadores
+                  </label>
+                </div>
+
+                {nuevaAula.esAulaDeOrdenadores && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Número de Ordenadores
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={nuevaAula.numeroOrdenadores}
+                      onChange={(e) => setNuevaAula({...nuevaAula, numeroOrdenadores: parseInt(e.target.value)})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full bg-indigo-600 text-white py-3 rounded-lg font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Plus className="h-5 w-5" />
+                  Crear Aula
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+export default App;
